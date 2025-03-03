@@ -21,7 +21,7 @@ class UISimulation {
         this.trialCount = 0;
         this.speed = 1000;
         this.running = false;
-        this.trail = [];
+        this.prevCursor = null; // Store previous cursor position for motion direction
         this.setupElementControls();
         this.setupDragging();
         this.drawUI();
@@ -53,14 +53,6 @@ class UISimulation {
         const scaleX = this.canvas.width / this.config.gridSize[0];
         const scaleY = this.canvas.height / this.config.gridSize[1];
 
-        // Draw trail
-        this.trail.forEach((point, index) => {
-            this.ctx.fillStyle = `rgba(0, 0, 255, ${1 - index * 0.1})`;
-            this.ctx.beginPath();
-            this.ctx.arc(point[0] * scaleX, point[1] * scaleY, 3, 0, 2 * Math.PI);
-            this.ctx.fill();
-        });
-
         for (const elem of this.config.elements) {
             const [x, y] = elem.pos;
             const [w, h] = elem.size;
@@ -79,142 +71,4 @@ class UISimulation {
         const scaleX = this.canvas.width / this.config.gridSize[0];
         const scaleY = this.canvas.height / this.config.gridSize[1];
         const x = cursor[0] * scaleX;
-        const y = cursor[1] * scaleY;
-        this.ctx.fillStyle = "blue";
-        this.ctx.beginPath();
-        this.ctx.moveTo(x, y - 10);
-        this.ctx.lineTo(x - 5, y + 5);
-        this.ctx.lineTo(x + 5, y + 5);
-        this.ctx.closePath();
-        this.ctx.fill();
-    }
-
-    updateResults() {
-        const choices = this.logs.map(log => log.choice);
-        const total = choices.length;
-        const stats = {};
-        for (const elem of this.config.elements) {
-            stats[elem.name] = Math.round((choices.filter(c => c === elem.name).length / total) * 100) || 0;
-        }
-        const successRate = stats["Login"];
-        const resultsDiv = document.getElementById("results");
-        resultsDiv.innerHTML = `
-            <strong>Results:</strong><br>
-            Login: ${stats["Login"]}% | Search: ${stats["Search"]}% | Help: ${stats["Help"]}% | Exit: ${stats["Exit"]}%<br>
-            Trials completed: ${total}${total >= this.trialCount && total > 0 ? `<br><strong>Success Rate (Login): ${successRate}%</strong>` : ""}
-        `;
-    }
-
-    setupElementControls() {
-        const configDiv = document.getElementById("elementConfig");
-        configDiv.innerHTML = "";
-        this.config.elements.forEach(elem => {
-            const div = document.createElement("div");
-            div.innerHTML = `
-                ${elem.name}: 
-                <select id="color-${elem.name}">
-                    <option value="green" ${elem.color === "green" ? "selected" : ""}>Green</option>
-                    <option value="yellow" ${elem.color === "yellow" ? "selected" : ""}>Yellow</option>
-                    <option value="gray" ${elem.color === "gray" ? "selected" : ""}>Gray</option>
-                    <option value="red" ${elem.color === "red" ? "selected" : ""}>Red</option>
-                </select>
-            `;
-            configDiv.appendChild(div);
-            document.getElementById(`color-${elem.name}`).addEventListener("change", (e) => {
-                elem.color = e.target.value;
-                this.drawUI();
-            });
-        });
-    }
-
-    setupDragging() {
-        let draggedElement = null;
-        const scaleX = this.config.gridSize[0] / this.canvas.width;
-        const scaleY = this.config.gridSize[1] / this.canvas.height;
-
-        this.canvas.addEventListener("mousedown", (e) => {
-            if (this.running) return;
-            const rect = this.canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * scaleX;
-            const y = (e.clientY - rect.top) * scaleY;
-            draggedElement = this.config.elements.find(elem => {
-                const [ex, ey] = elem.pos;
-                const [w, h] = elem.size;
-                return x >= ex - w / 2 && x <= ex + w / 2 && y >= ey - h / 2 && y <= ey + h / 2;
-            });
-        });
-
-        this.canvas.addEventListener("mousemove", (e) => {
-            if (draggedElement && !this.running) {
-                const rect = this.canvas.getBoundingClientRect();
-                const x = (e.clientX - rect.left) * scaleX;
-                const y = (e.clientY - rect.top) * scaleY;
-                draggedElement.pos = [Math.max(0, Math.min(x, this.config.gridSize[0])), Math.max(0, Math.min(y, this.config.gridSize[1]))];
-                this.drawUI();
-            }
-        });
-
-        this.canvas.addEventListener("mouseup", () => {
-            draggedElement = null;
-        });
-    }
-
-    async runTrial() {
-        if (!this.running || this.logs.length >= this.trialCount) {
-            this.running = false;
-            this.updateResults();
-            return;
-        }
-
-        const cursor = [
-            Math.random() * this.config.gridSize[0],
-            Math.random() * this.config.gridSize[1]
-        ];
-        const scores = this.calculateScores(cursor);
-        const [chosen] = scores.reduce((max, curr) => curr[1] > max[1] ? curr : max);
-
-        this.trail.unshift([...cursor]);
-        if (this.trail.length > 10) this.trail.pop();
-
-        this.drawUI();
-        this.drawCursor(cursor);
-        this.logs.push({ cursor, choice: chosen.name, scores: Object.fromEntries(scores.map(([e, s]) => [e.name, s])) });
-
-        this.updateResults();
-        await new Promise(resolve => setTimeout(resolve, this.speed));
-        this.runTrial();
-    }
-
-    start(trials, speed) {
-        this.trialCount = trials;
-        this.speed = speed;
-        this.logs = [];
-        this.trail = [];
-        this.running = true;
-        this.drawUI();
-        this.runTrial();
-    }
-
-    reset() {
-        this.running = false;
-        this.logs = [];
-        this.trail = [];
-        this.drawUI();
-        this.updateResults();
-    }
-}
-
-// Initialize simulation
-const config = new SimulationConfig();
-const sim = new UISimulation(config);
-
-// Event listeners for controls
-document.getElementById("startBtn").addEventListener("click", () => {
-    const trials = parseInt(document.getElementById("trialCount").value);
-    const speed = parseInt(document.getElementById("speed").value);
-    sim.start(trials, speed);
-});
-
-document.getElementById("resetBtn").addEventListener("click", () => {
-    sim.reset();
-});
+        const y = cursor[1] * scale
