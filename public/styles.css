@@ -6,7 +6,7 @@ body {
 }
 
 .container {
-    max-width: 600px;
+    max-width: 700px;
     margin: 0 auto;
     text-align: center;
 }
@@ -16,15 +16,24 @@ h1 {
     margin-bottom: 20px;
 }
 
-.controls {
+h3 {
+    font-size: 18px;
+    margin: 10px 0;
+}
+
+.controls, .element-controls, .info {
     margin-bottom: 20px;
+    background-color: #fff;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 }
 
 label {
     margin-right: 10px;
 }
 
-input {
+input, select {
     padding: 5px;
     width: 80px;
     margin-right: 10px;
@@ -48,8 +57,16 @@ button:hover {
     background-color: white;
 }
 
-#results {
-    margin-top: 20px;
+#results, .info {
     text-align: left;
     font-size: 14px;
+}
+
+.element-controls div {
+    margin: 5px 0;
+}
+
+.info ul {
+    list-style-type: none;
+    padding: 0;
 }
