@@ -21,7 +21,6 @@ class UISimulation {
         this.trialCount = 0;
         this.speed = 1000;
         this.running = false;
-        this.prevCursor = null; // Store previous cursor position for motion direction
         this.setupElementControls();
         this.setupDragging();
         this.drawUI();
@@ -67,13 +66,23 @@ class UISimulation {
         }
     }
 
-    drawCursor(cursor) {
+    drawCursor(cursor, targetPos) {
         const scaleX = this.canvas.width / this.config.gridSize[0];
         const scaleY = this.canvas.height / this.config.gridSize[1];
         const x = cursor[0] * scaleX;
         const y = cursor[1] * scaleY;
+        const targetX = targetPos[0] * scaleX;
+        const targetY = targetPos[1] * scaleY;
 
-        // Draw arrow cursor
+        // Draw motion trace from cursor to target
+        this.ctx.strokeStyle = "rgba(0, 0, 255, 0.5)";
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y);
+        this.ctx.lineTo(targetX, targetY);
+        this.ctx.stroke();
+
+        // Draw arrow cursor at current position
         this.ctx.fillStyle = "blue";
         this.ctx.beginPath();
         this.ctx.moveTo(x, y - 10);
@@ -81,18 +90,6 @@ class UISimulation {
         this.ctx.lineTo(x + 5, y + 5);
         this.ctx.closePath();
         this.ctx.fill();
-
-        // Draw motion direction line (if there's a previous position)
-        if (this.prevCursor) {
-            const prevX = this.prevCursor[0] * scaleX;
-            const prevY = this.prevCursor[1] * scaleY;
-            this.ctx.strokeStyle = "rgba(0, 0, 255, 0.5)";
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.moveTo(prevX, prevY);
-            this.ctx.lineTo(x, y);
-            this.ctx.stroke();
-        }
     }
 
     updateResults() {
@@ -168,23 +165,19 @@ class UISimulation {
     async runTrial() {
         if (!this.running || this.logs.length >= this.trialCount) {
             this.running = false;
-            this.prevCursor = null; // Reset motion indicator
             this.updateResults();
             return;
         }
 
-        // Simulate cursor motion: start from a previous position and move to a new one
         const cursor = [
             Math.random() * this.config.gridSize[0],
             Math.random() * this.config.gridSize[1]
         ];
-        this.prevCursor = this.logs.length > 0 ? this.logs[this.logs.length - 1].cursor : [cursor[0], cursor[1]]; // Start from last cursor or same point
-
         const scores = this.calculateScores(cursor);
         const [chosen] = scores.reduce((max, curr) => curr[1] > max[1] ? curr : max);
 
         this.drawUI();
-        this.drawCursor(cursor);
+        this.drawCursor(cursor, chosen.pos); // Draw cursor with trace to chosen element
         this.logs.push({ cursor, choice: chosen.name, scores: Object.fromEntries(scores.map(([e, s]) => [e.name, s])) });
 
         this.updateResults();
@@ -196,7 +189,6 @@ class UISimulation {
         this.trialCount = trials;
         this.speed = speed;
         this.logs = [];
-        this.prevCursor = null; // Clear motion indicator at start
         this.running = true;
         this.drawUI();
         this.runTrial();
@@ -205,7 +197,6 @@ class UISimulation {
     reset() {
         this.running = false;
         this.logs = [];
-        this.prevCursor = null; // Clear motion indicator on reset
         this.drawUI();
         this.updateResults();
     }
