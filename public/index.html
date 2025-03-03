@@ -17,8 +17,21 @@
             <button id="startBtn">Start Simulation</button>
             <button id="resetBtn">Reset</button>
         </div>
+        <div class="element-controls">
+            <h3>Configure UI Elements</h3>
+            <div id="elementConfig"></div>
+        </div>
         <canvas id="simulationCanvas" width="500" height="500"></canvas>
         <div id="results"></div>
+        <div class="info">
+            <h3>Info</h3>
+            <p>Heuristic Weights:</p>
+            <ul>
+                <li>Salience: 50%</li>
+                <li>Proximity: 20%</li>
+                <li>Color: 30%</li>
+            </ul>
+        </div>
     </div>
     <script src="simulation.js"></script>
 </body>
