@@ -6,23 +6,9 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 700px;
     margin: 0 auto;
     text-align: center;
-}
-
-.main-content {
-    display: flex;
-    justify-content: space-between;
-}
-
-.left-pane {
-    flex: 2;
-}
-
-.right-pane {
-    flex: 1;
-    margin-left: 20px;
 }
 
 h1 {
@@ -35,7 +21,7 @@ h3 {
     margin: 10px 0;
 }
 
-.controls, .element-controls, .info, #logPane {
+.controls, .element-controls, .info {
     margin-bottom: 20px;
     background-color: #fff;
     padding: 10px;
@@ -80,20 +66,7 @@ button:hover {
     margin: 5px 0;
 }
 
-.info ul, #logPane ul {
+.info ul {
     list-style-type: none;
     padding: 0;
-}
-
-.log-entry {
-    margin: 5px 0;
-}
-
-.log-entry a {
-    text-decoration: none;
-    color: #007bff;
-}
-
-.log-entry a:hover {
-    text-decoration: underline;
 }
