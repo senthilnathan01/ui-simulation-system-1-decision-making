@@ -1,4 +1,3 @@
-// public/simulation.js
 class SimulationConfig {
     constructor() {
         this.elements = [
