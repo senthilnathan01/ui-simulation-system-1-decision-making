@@ -1,3 +1,4 @@
+// public/simulation.js
 class SimulationConfig {
     constructor() {
         this.elements = [
@@ -16,6 +17,7 @@ class UISimulation {
     constructor(config) {
         this.config = config;
         this.logs = [];
+        this.simulations = []; // Store completed simulation results
         this.canvas = document.getElementById("simulationCanvas");
         this.ctx = this.canvas.getContext("2d");
         this.trialCount = 0;
@@ -24,6 +26,7 @@ class UISimulation {
         this.setupElementControls();
         this.setupDragging();
         this.drawUI();
+        this.setupLogPane();
     }
 
     calculateDistance(pos1, pos2) {
@@ -47,12 +50,12 @@ class UISimulation {
         return scores;
     }
 
-    drawUI() {
+    drawUI(elements = this.config.elements) {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         const scaleX = this.canvas.width / this.config.gridSize[0];
         const scaleY = this.canvas.height / this.config.gridSize[1];
 
-        for (const elem of this.config.elements) {
+        for (const elem of elements) {
             const [x, y] = elem.pos;
             const [w, h] = elem.size;
             this.ctx.fillStyle = elem.color;
@@ -66,30 +69,30 @@ class UISimulation {
         }
     }
 
-    drawCursor(cursor, targetPos) {
+    async animateCursor(cursor, targetPos) {
         const scaleX = this.canvas.width / this.config.gridSize[0];
         const scaleY = this.canvas.height / this.config.gridSize[1];
-        const x = cursor[0] * scaleX;
-        const y = cursor[1] * scaleY;
-        const targetX = targetPos[0] * scaleX;
-        const targetY = targetPos[1] * scaleY;
+        const startX = cursor[0] * scaleX;
+        const startY = cursor[1] * scaleY;
+        const endX = targetPos[0] * scaleX;
+        const endY = targetPos[1] * scaleY;
+        const steps = 20; // Animation steps
+        const dx = (endX - startX) / steps;
+        const dy = (endY - startY) / steps;
 
-        // Draw motion trace from cursor to target
-        this.ctx.strokeStyle = "rgba(0, 0, 255, 0.5)";
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(x, y);
-        this.ctx.lineTo(targetX, targetY);
-        this.ctx.stroke();
-
-        // Draw arrow cursor at current position
-        this.ctx.fillStyle = "blue";
-        this.ctx.beginPath();
-        this.ctx.moveTo(x, y - 10);
-        this.ctx.lineTo(x - 5, y + 5);
-        this.ctx.lineTo(x + 5, y + 5);
-        this.ctx.closePath();
-        this.ctx.fill();
+        for (let i = 0; i <= steps; i++) {
+            this.drawUI();
+            const x = startX + dx * i;
+            const y = startY + dy * i;
+            this.ctx.fillStyle = "blue";
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y - 10);
+            this.ctx.lineTo(x - 5, y + 5);
+            this.ctx.lineTo(x + 5, y + 5);
+            this.ctx.closePath();
+            this.ctx.fill();
+            await new Promise(resolve => setTimeout(resolve, this.speed / steps / 2));
+        }
     }
 
     updateResults() {
@@ -106,6 +109,7 @@ class UISimulation {
             Login: ${stats["Login"]}% | Search: ${stats["Search"]}% | Help: ${stats["Help"]}% | Exit: ${stats["Exit"]}%<br>
             Trials completed: ${total}${total >= this.trialCount && total > 0 ? `<br><strong>Success Rate (Login): ${successRate}%</strong>` : ""}
         `;
+        return { stats, successRate, total };
     }
 
     setupElementControls() {
@@ -162,10 +166,45 @@ class UISimulation {
         });
     }
 
+    setupLogPane() {
+        const logPane = document.getElementById("logPane");
+        logPane.addEventListener("click", (e) => {
+            const simId = e.target.dataset.simId;
+            if (simId) {
+                const sim = this.simulations[simId];
+                this.drawUI(sim.elements);
+                document.getElementById("results").innerHTML = `
+                    <strong>Simulation ${parseInt(simId) + 1} Details:</strong><br>
+                    Login: ${sim.stats["Login"]}% | Search: ${sim.stats["Search"]}% | Help: ${sim.stats["Help"]}% | Exit: ${sim.stats["Exit"]}%<br>
+                    Trials: ${sim.total}<br>
+                    Success Rate (Login): ${sim.successRate}%
+                `;
+            }
+        });
+    }
+
+    updateLogPane() {
+        const logPane = document.getElementById("logPane");
+        logPane.innerHTML = "<h3>Simulation Logs</h3>";
+        this.simulations.forEach((sim, i) => {
+            const logEntry = document.createElement("div");
+            logEntry.className = "log-entry";
+            logEntry.innerHTML = `<a href="#" data-sim-id="${i}">Simulation ${i + 1}: Success ${sim.successRate}% (${sim.total} trials)</a>`;
+            logPane.appendChild(logEntry);
+        });
+    }
+
     async runTrial() {
         if (!this.running || this.logs.length >= this.trialCount) {
             this.running = false;
-            this.updateResults();
+            const results = this.updateResults();
+            this.simulations.push({
+                elements: JSON.parse(JSON.stringify(this.config.elements)), // Deep copy
+                stats: results.stats,
+                successRate: results.successRate,
+                total: results.total
+            });
+            this.updateLogPane();
             return;
         }
 
@@ -177,11 +216,10 @@ class UISimulation {
         const [chosen] = scores.reduce((max, curr) => curr[1] > max[1] ? curr : max);
 
         this.drawUI();
-        this.drawCursor(cursor, chosen.pos); // Draw cursor with trace to chosen element
+        await this.animateCursor(cursor, chosen.pos); // Animate cursor to target
         this.logs.push({ cursor, choice: chosen.name, scores: Object.fromEntries(scores.map(([e, s]) => [e.name, s])) });
 
-        this.updateResults();
-        await new Promise(resolve => setTimeout(resolve, this.speed));
+        await new Promise(resolve => setTimeout(resolve, this.speed / 2)); // Pause after animation
         this.runTrial();
     }
 
@@ -197,8 +235,10 @@ class UISimulation {
     reset() {
         this.running = false;
         this.logs = [];
+        this.simulations = [];
         this.drawUI();
         this.updateResults();
+        this.updateLogPane();
     }
 }
 
