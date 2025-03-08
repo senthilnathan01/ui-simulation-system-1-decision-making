@@ -1,54 +1,218 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UI Decision Simulation</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <div class="container">
-        <h1>UI Decision Simulation</h1>
-        <div class="main-content">
-            <div class="left-pane">
-                <div class="controls">
-                    <label for="trialCount">Number of Trials:</label>
-                    <input type="number" id="trialCount" value="10" min="1" max="100">
-                    <label for="speed">Speed (ms per trial):</label>
-                    <input type="number" id="speed" value="1000" min="100" max="5000">
-                    <button id="startBtn">Start Simulation</button>
-                    <button id="resetBtn">Reset</button>
-                </div>
-                <div class="element-controls">
-                    <h3>Configure UI Elements</h3>
-                    <div id="elementConfig"></div>
-                </div>
-                <canvas id="simulationCanvas" width="500" height="500"></canvas>
-                <div id="results"></div>
-            </div>
-            <div class="right-pane">
-                <div id="logPane">
-                    <h3>Simulation Logs</h3>
-                </div>
-                <div class="info">
-                    <h3>Info</h3>
-                    <p>Heuristic Weights:</p>
-                    <ul>
-                        <li>Salience: 50%</li>
-                        <li>Proximity: 20%</li>
-                        <li>Color: 30%</li>
-                    </ul>
-                    <p>Color Weights:</p>
-                    <ul>
-                        <li>Green: 0.8 (Positive)</li>
-                        <li>Yellow: 0.4 (Neutral)</li>
-                        <li>Gray: 0.3 (Neutral)</li>
-                        <li>Red: 0.1 (Negative)</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script src="simulation.js"></script>
-</body>
-</html>
+class SimulationConfig {
+    constructor() {
+        this.elements = [
+            { name: "Login", prominence: 9, pos: [50, 50], color: "green", size: [15, 7] },
+            { name: "Search", prominence: 7, pos: [50, 80], color: "yellow", size: [20, 7] },
+            { name: "Help", prominence: 5, pos: [10, 80], color: "gray", size: [10, 10] },
+            { name: "Exit", prominence: 3, pos: [90, 90], color: "red", size: [8, 8] }
+        ];
+        this.gridSize = [100, 100];
+        this.heuristicWeights = { salience: 0.5, proximity: 0.2, color: 0.3 };
+        this.colorWeights = { green: 0.8, yellow: 0.4, gray: 0.3, red: 0.1 };
+    }
+}
+
+class UISimulation {
+    constructor(config) {
+        this.config = config;
+        this.logs = [];
+        this.canvas = document.getElementById("simulationCanvas");
+        this.ctx = this.canvas.getContext("2d");
+        this.trialCount = 0;
+        this.speed = 1000;
+        this.running = false;
+        this.setupElementControls();
+        this.setupDragging();
+        this.drawUI();
+    }
+
+    calculateDistance(pos1, pos2) {
+        return Math.sqrt((pos1[0] - pos2[0]) ** 2 + (pos1[1] - pos2[1]) ** 2);
+    }
+
+    calculateScores(cursor) {
+        const scores = [];
+        for (const elem of this.config.elements) {
+            const dist = this.calculateDistance(elem.pos, cursor);
+            const proximityScore = 100 / (dist + 0.1);
+            const colorScore = this.config.colorWeights[elem.color] || 0.5;
+            const salienceScore = elem.prominence / 10;
+            const total = (
+                this.config.heuristicWeights.salience * salienceScore +
+                this.config.heuristicWeights.proximity * proximityScore +
+                this.config.heuristicWeights.color * colorScore
+            );
+            scores.push([elem, total]);
+        }
+        return scores;
+    }
+
+    drawUI() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        const scaleX = this.canvas.width / this.config.gridSize[0];
+        const scaleY = this.canvas.height / this.config.gridSize[1];
+
+        for (const elem of this.config.elements) {
+            const [x, y] = elem.pos;
+            const [w, h] = elem.size;
+            this.ctx.fillStyle = elem.color;
+            this.ctx.fillRect((x - w / 2) * scaleX, (y - h / 2) * scaleY, w * scaleX, h * scaleY);
+            this.ctx.strokeStyle = "black";
+            this.ctx.strokeRect((x - w / 2) * scaleX, (y - h / 2) * scaleY, w * scaleX, h * scaleY);
+            this.ctx.fillStyle = "black";
+            this.ctx.font = "12px Arial";
+            this.ctx.textAlign = "center";
+            this.ctx.fillText(elem.name, x * scaleX, y * scaleY + 4);
+        }
+    }
+
+    drawCursor(cursor, targetPos) {
+        const scaleX = this.canvas.width / this.config.gridSize[0];
+        const scaleY = this.canvas.height / this.config.gridSize[1];
+        const x = cursor[0] * scaleX;
+        const y = cursor[1] * scaleY;
+        const targetX = targetPos[0] * scaleX;
+        const targetY = targetPos[1] * scaleY;
+
+        // Draw motion trace from cursor to target
+        this.ctx.strokeStyle = "rgba(0, 0, 255, 0.5)";
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y);
+        this.ctx.lineTo(targetX, targetY);
+        this.ctx.stroke();
+
+        // Draw arrow cursor at current position
+        this.ctx.fillStyle = "blue";
+        this.ctx.beginPath();
+        this.ctx.moveTo(x, y - 10);
+        this.ctx.lineTo(x - 5, y + 5);
+        this.ctx.lineTo(x + 5, y + 5);
+        this.ctx.closePath();
+        this.ctx.fill();
+    }
+
+    updateResults() {
+        const choices = this.logs.map(log => log.choice);
+        const total = choices.length;
+        const stats = {};
+        for (const elem of this.config.elements) {
+            stats[elem.name] = Math.round((choices.filter(c => c === elem.name).length / total) * 100) || 0;
+        }
+        const successRate = stats["Login"];
+        const resultsDiv = document.getElementById("results");
+        resultsDiv.innerHTML = `
+            <strong>Results:</strong><br>
+            Login: ${stats["Login"]}% | Search: ${stats["Search"]}% | Help: ${stats["Help"]}% | Exit: ${stats["Exit"]}%<br>
+            Trials completed: ${total}${total >= this.trialCount && total > 0 ? `<br><strong>Success Rate (Login): ${successRate}%</strong>` : ""}
+        `;
+    }
+
+    setupElementControls() {
+        const configDiv = document.getElementById("elementConfig");
+        configDiv.innerHTML = "";
+        this.config.elements.forEach(elem => {
+            const div = document.createElement("div");
+            div.innerHTML = `
+                ${elem.name}: 
+                <select id="color-${elem.name}">
+                    <option value="green" ${elem.color === "green" ? "selected" : ""}>Green</option>
+                    <option value="yellow" ${elem.color === "yellow" ? "selected" : ""}>Yellow</option>
+                    <option value="gray" ${elem.color === "gray" ? "selected" : ""}>Gray</option>
+                    <option value="red" ${elem.color === "red" ? "selected" : ""}>Red</option>
+                </select>
+            `;
+            configDiv.appendChild(div);
+            document.getElementById(`color-${elem.name}`).addEventListener("change", (e) => {
+                elem.color = e.target.value;
+                this.drawUI();
+            });
+        });
+    }
+
+    setupDragging() {
+        let draggedElement = null;
+        const scaleX = this.config.gridSize[0] / this.canvas.width;
+        const scaleY = this.config.gridSize[1] / this.canvas.height;
+
+        this.canvas.addEventListener("mousedown", (e) => {
+            if (this.running) return;
+            const rect = this.canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+            draggedElement = this.config.elements.find(elem => {
+                const [ex, ey] = elem.pos;
+                const [w, h] = elem.size;
+                return x >= ex - w / 2 && x <= ex + w / 2 && y >= ey - h / 2 && y <= ey + h / 2;
+            });
+        });
+
+        this.canvas.addEventListener("mousemove", (e) => {
+            if (draggedElement && !this.running) {
+                const rect = this.canvas.getBoundingClientRect();
+                const x = (e.clientX - rect.left) * scaleX;
+                const y = (e.clientY - rect.top) * scaleY;
+                draggedElement.pos = [Math.max(0, Math.min(x, this.config.gridSize[0])), Math.max(0, Math.min(y, this.config.gridSize[1]))];
+                this.drawUI();
+            }
+        });
+
+        this.canvas.addEventListener("mouseup", () => {
+            draggedElement = null;
+        });
+    }
+
+    async runTrial() {
+        if (!this.running || this.logs.length >= this.trialCount) {
+            this.running = false;
+            this.updateResults();
+            return;
+        }
+
+        const cursor = [
+            Math.random() * this.config.gridSize[0],
+            Math.random() * this.config.gridSize[1]
+        ];
+        const scores = this.calculateScores(cursor);
+        const [chosen] = scores.reduce((max, curr) => curr[1] > max[1] ? curr : max);
+
+        this.drawUI();
+        this.drawCursor(cursor, chosen.pos); // Draw cursor with trace to chosen element
+        this.logs.push({ cursor, choice: chosen.name, scores: Object.fromEntries(scores.map(([e, s]) => [e.name, s])) });
+
+        this.updateResults();
+        await new Promise(resolve => setTimeout(resolve, this.speed));
+        this.runTrial();
+    }
+
+    start(trials, speed) {
+        this.trialCount = trials;
+        this.speed = speed;
+        this.logs = [];
+        this.running = true;
+        this.drawUI();
+        this.runTrial();
+    }
+
+    reset() {
+        this.running = false;
+        this.logs = [];
+        this.drawUI();
+        this.updateResults();
+    }
+}
+
+// Initialize simulation
+const config = new SimulationConfig();
+const sim = new UISimulation(config);
+
+// Event listeners for controls
+document.getElementById("startBtn").addEventListener("click", () => {
+    const trials = parseInt(document.getElementById("trialCount").value);
+    const speed = parseInt(document.getElementById("speed").value);
+    sim.start(trials, speed);
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+    sim.reset();
+});
